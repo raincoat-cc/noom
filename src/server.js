@@ -1,7 +1,7 @@
 import http from "http";
 import { Server } from "socket.io";
 import express from "express";
-import path from "path";
+import path, { join } from "path";
 const __dirname = path.resolve();
 
 const app = express();
@@ -26,16 +26,17 @@ function publicRooms() {
   } = wsServer;
   const publicRooms = [];
   rooms.forEach((_, key) => {
-    if (sids.get(key) === "undefined") {
+    if (sids.get(key) === undefined) {
       publicRooms.push(key);
     }
   });
+  return publicRooms;
 }
 
 wsServer.on("connection", socket => {
   socket["nickname"] = "Anon";
   socket.onAny(event => {
-    console.log(wsServer.sockets.adapter);
+    // console.log(wsServer.sockets.adapter);
     console.log(`Socket Event: ${event}`);
   });
 
@@ -43,14 +44,20 @@ wsServer.on("connection", socket => {
     socket.join(roomName);
     done();
     socket.to(roomName).emit("welcome", socket.nickname);
+    wsServer.sockets.emit("room_change", publicRooms());
   });
   socket.on("disconnecting", () => {
-    socket.rooms.forEach(room => socket.to(room).emit("bye"), socket.nickname);
+    socket.rooms.forEach(room => socket.to(room).emit("bye", socket.nickname));
   });
+  socket.on("disconnect", () => {
+    wsServer.sockets.emit("room_change", publicRooms());
+  });
+
   socket.on("new_message", (msg, room, done) => {
     socket.to(room).emit("new_message", `${socket.nickname}: ${msg}`);
     done();
   });
+
   socket.on("nickname", nickname => (socket["nickname"] = nickname));
 });
 
